@@ -19,6 +19,9 @@ preferences {
 }
 
 metadata {
+
+	attribute "connection", "string"
+    
 	definition (name: "Spark Core Temp Mon", author: "Nic B") {
 		capability "Polling"
 		capability "Temperature Measurement"
@@ -30,8 +33,8 @@ metadata {
 		
 	}
 
-	tiles {
-		valueTile("temperature", "device.temperature", width: 2, height: 2){
+	tiles(scale: 2) {
+		valueTile("temperature", "device.temperature", width: 6, height: 4){
             state "temperature", label: '${currentValue}°F', unit:"",
             	backgroundColors: [
 					[value: 31, color: "#153591"],
@@ -44,16 +47,21 @@ metadata {
                 ]
 		}
         
-        valueTile("humidity", "device.humidity", width: 1, height: 1) {
-            state "default", label:'${currentValue}%', unit:"Humidity"
+        valueTile("humidity", "device.humidity", width: 2, height: 2) {
+            state "humidity", label:'${currentValue}%', unit:"Humidity"
         }
         
-        standardTile("refresh", "device.temperature", inactiveLabel: false, decoration: "flat") {
+        valueTile("connection", "device.connection", width: 2, height: 2){
+            state "disconnected", label: 'Disconnected', backgroundColor: "#bc2323"
+            state "connected", label: 'Connected', backgroundColor: "#44b621"
+		}
+        
+        standardTile("refresh", "device.temperature", width: 2, height: 2, inactiveLabel: false, decoration: "flat") {
             state "default", action:"polling.poll", icon:"st.secondary.refresh"
         }
         
         main "temperature"
-		details(["temperature", "humidity", "refresh"])
+		details(["temperature", "humidity", "connection", "refresh"])
 	}
 }
 
@@ -64,13 +72,27 @@ def poll() {
     getTemperature()
 }
 
-// Get the temperature & humidity
+// Get the temperature, humidity, and connection status
 private getTemperature() {
     //Spark Core API Call
     def temperatureClosure = { response ->
-	  	log.debug "Temeprature Request was successful, $response.data"
-      
-      	sendEvent(name: "temperature", value: response.data.return_value)
+	  	log.debug "Temeprature request was successful, '$response.data'"
+        log.debug "Connection: '$response.data.connected'"
+      	if (response.data.return_value > 30 && response.data.return_value < 110) {
+        sendEvent(name: "temperature", value: response.data.return_value)
+        }
+        else{
+        sendEvent(name: "connection", value: "disconnected")
+        }
+        
+        if (response.data.connected == true) {
+        log.debug "Setting connection tile to connected"
+        sendEvent(name: "connection", value: "connected")
+        }
+        else{
+        log.debug "Setting connection tile to disconnected"
+        sendEvent(name: "connection", value: "disconnected")
+        }
 	}
     
     def temperatureParams = [
@@ -79,12 +101,19 @@ private getTemperature() {
         success: temperatureClosure
 	]
 
+try {
 	httpPost(temperatureParams)
+} catch (e) {
+    log.error "Something went wrong getting Temp: $e"
+}
 
     def humidityClosure = { response ->
-	  	log.debug "Humidity Request was successful, $response.data"
-      
+	  	log.debug "Humidity request was successful, $response.data"
+      	
+        if (response.data.return_value > 10 && response.data.return_value < 100) {
       	sendEvent(name: "humidity", value: response.data.return_value)
+        }
+        
 	}
     
     def humidityParams = [
@@ -92,6 +121,9 @@ private getTemperature() {
         body: [access_token: token],  
         success: humidityClosure
 	]
-
+try {
 	httpPost(humidityParams)
+} catch (e) {
+    log.error "Something went wrong getting Hum: $e"
+}
 }
