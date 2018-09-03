@@ -37,7 +37,8 @@ preferences {
 mappings {
     path("/temperature") {
     action: [
-      GET: "getTemp"
+      GET: "getTemp",
+      POST: "updateTemperature"
     ]
   }
     path("/temperature/:CurTemp") {
@@ -57,7 +58,10 @@ def getTemp() {
 }
 
 void updateTemperature() {
-def CurTemp = params.CurTemp
+def CurTempJSON = request.JSON?.CurTemp
+log.debug "received json: $CurTempJSON"
+def CurTemp = CurTempJSON
+
 	temperature.setTemperature(CurTemp.toInteger())
     log.debug CurTemp.toInteger()
 }
